@@ -1,0 +1,10 @@
+Flask==3.0.0
+tensorflow>=2.16.0
+numpy
+Pillow
+opencv-python
+flask-login==0.6.3
+Authlib==1.3.0
+Werkzeug==3.0.1
+onnxruntime
+python-dotenv

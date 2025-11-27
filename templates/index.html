@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pneumonia Detection</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-content">
+                <h1>🫁 Pneumonia Detection</h1>
+                <p class="subtitle">Upload a chest X-ray image to detect pneumonia using deep learning</p>
+            </div>
+            <div class="header-right">
+                <div class="theme-selector">
+                    <button type="button" class="theme-btn" data-theme="light">
+                        <span>☀️</span> Light
+                    </button>
+                    <button type="button" class="theme-btn active" data-theme="dark">
+                        <span>🌙</span> Dark
+                    </button>
+                    <button type="button" class="theme-btn" data-theme="system">
+                        <span>💻</span> System
+                    </button>
+                </div>
+                <div class="user-menu">
+                    {% if current_user.is_authenticated %}
+                        <span class="user-name">👤 {{ current_user.name }}</span>
+                        <a href="{{ url_for('history') }}" class="btn-secondary">📋 History</a>
+                        <a href="{{ url_for('logout') }}" class="btn-secondary">Logout</a>
+                    {% else %}
+                        <a href="{{ url_for('login') }}" class="btn-secondary">Sign In</a>
+                    {% endif %}
+                </div>
+            </div>
+        </header>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <form id="upload-form" action="/predict" method="POST" enctype="multipart/form-data">
+            <div class="upload-section">
+                <div class="upload-area" id="upload-area">
+                    <input type="file" name="image" id="image-input" accept="image/*" required>
+                    <div class="upload-placeholder" id="upload-placeholder">
+                        <span class="upload-icon">📤</span>
+                        <p>Drag & drop an X-ray image here</p>
+                        <p class="small">or click to browse</p>
+                    </div>
+                    <img id="preview-img" class="preview-image hidden" alt="Preview">
+                </div>
+            </div>
+
+            <div class="model-section">
+                <label for="model-select">Select Model:</label>
+                <div class="model-buttons">
+                    <input type="radio" name="model_name" value="resnet" id="resnet" {% if not model_used or model_used == 'RESNET' %}checked{% endif %}>
+                    <label for="resnet" class="model-btn">
+                        <span class="model-name">ResNet50</span>
+                        <span class="model-acc">80% acc</span>
+                    </label>
+
+                    <input type="radio" name="model_name" value="densenet" id="densenet" {% if model_used == 'DENSENET' %}checked{% endif %}>
+                    <label for="densenet" class="model-btn">
+                        <span class="model-name">DenseNet121</span>
+                        <span class="model-acc">91% acc</span>
+                    </label>
+
+                    <input type="radio" name="model_name" value="vgg" id="vgg" {% if model_used == 'VGG' %}checked{% endif %}>
+                    <label for="vgg" class="model-btn">
+                        <span class="model-name">VGG16</span>
+                        <span class="model-acc">96% acc</span>
+                    </label>
+                </div>
+            </div>
+
+            <button type="submit" class="analyze-btn" id="analyze-btn">
+                <span class="btn-text">Analyze X-Ray</span>
+                <span class="btn-loading hidden">Analyzing...</span>
+            </button>
+        </form>
+
+        {% if prediction %}
+        <div class="results-section">
+            <h2>Results</h2>
+            
+            <div class="result-card {{ 'pneumonia' if prediction == 'PNEUMONIA' else 'normal' }}">
+                <div class="result-label">
+                    <span class="result-icon">{{ '⚠️' if prediction == 'PNEUMONIA' else '✅' }}</span>
+                    <span class="result-text">{{ prediction }}</span>
+                </div>
+                <div class="result-confidence">
+                    <span>Confidence:</span>
+                    <div class="confidence-bar">
+                        <div class="confidence-fill" style="width: {{ confidence }}%"></div>
+                    </div>
+                    <span class="confidence-value">{{ confidence }}%</span>
+                </div>
+                <div class="result-model">
+                    Model used: <strong>{{ model_used }}</strong>
+                </div>
+            </div>
+
+            <div class="image-comparison">
+                <div class="image-box">
+                    <h3>Original X-Ray</h3>
+                    <img src="{{ url_for('static', filename=preview_image) }}" alt="Original X-Ray">
+                </div>
+                <div class="image-box">
+                    <h3>Grad-CAM Heatmap</h3>
+                    <img src="{{ url_for('static', filename=heatmap_image) }}" alt="Grad-CAM Heatmap">
+                    <div class="heatmap-legend">
+                        <div class="legend-title">Attention Intensity:</div>
+                        <div class="legend-gradient">
+                            <div class="legend-labels">
+                                <span>Low</span>
+                                <span>Medium</span>
+                                <span>High</span>
+                            </div>
+                        </div>
+                        <p class="legend-description">Warmer colors (red/yellow) indicate regions the model focused on most when making its classification.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="disclaimer">
+                <strong>⚠️ Disclaimer:</strong> This tool is for educational purposes only and should not be used as a substitute for professional medical diagnosis.
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

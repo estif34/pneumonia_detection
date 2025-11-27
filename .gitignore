@@ -1,0 +1,16 @@
+﻿# Large model files – NEVER commit these
+*.keras
+*.h5
+*.pth
+*.pt
+*.pkl
+*.pickle
+
+# Folders
+models/
+venv/
+.env
+__pycache__/
+*.pyc
+pneumonia_detection.db
+static/uploads/*
