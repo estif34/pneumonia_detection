@@ -11,10 +11,6 @@ import os
 from datetime import datetime
 import sqlite3
 from functools import wraps
-from dotenv import load_dotenv
-
-
-load_dotenv()  # Loads the variables from the .env file
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY')  # Change this!
@@ -38,13 +34,10 @@ google = oauth.register(
     server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
     client_kwargs={'scope': 'openid email profile'}
 )
-
-# Load models once at startup
-MODELS = {
-    "resnet": load_model("models/pneumonia_resnet50_0.80(21Nov25).keras"),
-    "densenet": load_model("models/pneumonia_densenet121_0.91(21Nov25).keras"),
-    "vgg": load_model("models/pneumonia_vgg16_0.96(21Nov25).keras")
-}
+# Load model once at startup
+MODEL = load_model("models/pneumonia_vgg16_0.96(21Nov25).keras")
+MODEL_NAME = "VGG16"
+MODEL_ACCURACY = "96%"
 
 IMG_SIZE = (224, 224)
 
@@ -131,7 +124,11 @@ def register():
 
 @app.route("/auth/google")
 def google_login():
-    redirect_uri = url_for('google_callback', _external=True)
+    # Use http://127.0.0.1:5000 instead of localhost to avoid redirect issues
+    redirect_uri = url_for('google_callback', _external=True, _scheme='http')
+    # Override if needed for development
+    if app.debug:
+        redirect_uri = 'http://127.0.0.1:5000/auth/google/callback'
     return google.authorize_redirect(redirect_uri)
 
 @app.route("/auth/google/callback")
@@ -302,7 +299,7 @@ def predict():
 def history():
     conn = sqlite3.connect('pneumonia_detection.db')
     c = conn.cursor()
-    c.execute('''SELECT image_filename, heatmap_filename, model_used, prediction, 
+    c.execute('''SELECT id, image_filename, heatmap_filename, model_used, prediction, 
                         confidence, created_at 
                  FROM history 
                  WHERE user_id = ? 
@@ -313,12 +310,13 @@ def history():
     history_data = []
     for record in records:
         history_data.append({
-            'image': f"uploads/{record[0]}",
-            'heatmap': f"uploads/{record[1]}",
-            'model': record[2],
-            'prediction': record[3],
-            'confidence': record[4],
-            'date': record[5]
+            'id': record[0],
+            'image': f"uploads/{record[1]}",
+            'heatmap': f"uploads/{record[2]}",
+            'model': record[3],
+            'prediction': record[4],
+            'confidence': record[5],
+            'date': record[6]
         })
     
     return render_template("history.html", history=history_data)
@@ -329,23 +327,29 @@ def delete_history(record_id):
     conn = sqlite3.connect('pneumonia_detection.db')
     c = conn.cursor()
     
-    # Get filenames before deleting
-    c.execute('SELECT image_filename, heatmap_filename FROM history WHERE id = ? AND user_id = ?',
+    # Get filenames and verify ownership before deleting
+    c.execute('SELECT id, image_filename, heatmap_filename FROM history WHERE id = ? AND user_id = ?',
              (record_id, current_user.id))
     record = c.fetchone()
     
     if record:
         # Delete files
         try:
-            os.remove(os.path.join(app.config['UPLOAD_FOLDER'], record[0]))
-            os.remove(os.path.join(app.config['UPLOAD_FOLDER'], record[1]))
-        except:
-            pass
+            image_path = os.path.join(app.config['UPLOAD_FOLDER'], record[1])
+            heatmap_path = os.path.join(app.config['UPLOAD_FOLDER'], record[2])
+            if os.path.exists(image_path):
+                os.remove(image_path)
+            if os.path.exists(heatmap_path):
+                os.remove(heatmap_path)
+        except Exception as e:
+            print(f"Error deleting files: {e}")
         
         # Delete from database
         c.execute('DELETE FROM history WHERE id = ? AND user_id = ?', (record_id, current_user.id))
         conn.commit()
         flash('Record deleted successfully', 'success')
+    else:
+        flash('Record not found', 'error')
     
     conn.close()
     return redirect(url_for('history'))
